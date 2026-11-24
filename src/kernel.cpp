@@ -23,6 +23,7 @@
 #include "config.h"
 #include "diag.h"
 #include "kernel.h"
+#include "utility.h"
 
 #ifndef MT32_PI_VERSION
 #define MT32_PI_VERSION "<unknown>"
@@ -53,6 +54,9 @@ bool CKernel::Initialize(void)
 {
 	if (!CStdlibApp::Initialize())
 		return false;
+
+	// Wake low-power waits regularly on this core (the other cores do this when their tasks start)
+	Utility::EnableEventStream();
 
 #ifdef HDMI_CONSOLE
 	if (!m_Screen.Initialize())

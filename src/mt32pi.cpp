@@ -51,6 +51,10 @@ constexpr u32 ActiveSenseTimeoutMillis             = 330;
 constexpr u32 UnderrunWarningPeriodMillis          = 5000;
 constexpr unsigned HotTemperatureCelsius           = 80;
 
+// Low-power rest between polls of the task loops, instead of spinning (keeps the CPU cool)
+constexpr unsigned IdleRestMicros                  = 20;	// MIDI, audio and SC-55 loops
+constexpr unsigned UIIdleRestMicros                = 100;	// LCD/MiSTer loop (updates every 16/50 ms)
+
 constexpr float Sample24BitMax = (1 << (24 - 1)) - 1;
 
 #ifdef DIAG_LCD
@@ -541,6 +545,8 @@ void CMT32Pi::MainTask()
 
 	LOGNOTE("Main task on Core 0 starting up");
 
+	Utility::EnableEventStream();
+
 	Awaken();
 
 	// Only warn about audio dropouts that happen from now on, and not while audio starts up
@@ -674,6 +680,9 @@ void CMT32Pi::MainTask()
 
 		// Allow other tasks to run
 		pScheduler->Yield();
+
+		// Rest instead of spinning
+		Utility::IdleRest(IdleRestMicros, &Diag::nIdleTicks[0]);
 	}
 
 
@@ -688,6 +697,8 @@ void CMT32Pi::MainTask()
 void CMT32Pi::UITask()
 {
 	LOGNOTE("UI task on Core 1 starting up");
+
+	Utility::EnableEventStream();
 
 	const bool bMisterEnabled = m_pConfig->ControlMister;
 
@@ -753,6 +764,9 @@ void CMT32Pi::UITask()
 			m_MisterControl.Update(Status);
 			m_nMisterUpdateTime = nTicks;
 		}
+
+		// Rest instead of spinning
+		Utility::IdleRest(UIIdleRestMicros, &Diag::nIdleTicks[1]);
 	}
 
 	// Clear screen
@@ -777,6 +791,8 @@ void CMT32Pi::AudioTask()
 {
 	LOGNOTE("Audio task on Core 2 starting up");
 
+	Utility::EnableEventStream();
+
 	constexpr u8 nChannels = 2;
 
 	// Circle's "fast path" for I2S 24-bit really expects 32-bit samples
@@ -797,6 +813,13 @@ void CMT32Pi::AudioTask()
 
 		const size_t nFrames = nQueueSizeFrames - m_pSound->GetQueueFramesAvail();
 		const size_t nWriteBytes = nFrames * nBytesPerFrame;
+
+		// Queue full: rest instead of spinning
+		if (nFrames == 0)
+		{
+			Utility::IdleRest(IdleRestMicros, &Diag::nIdleTicks[2]);
+			continue;
+		}
 
 		m_pCurrentSynth->Render(FloatBuffer, nFrames);
 
@@ -853,16 +876,20 @@ void CMT32Pi::SC55ProducerCoreTask()
 {
         LOGNOTE("SC-55 producer running on Core 3");
 
+        Utility::EnableEventStream();
+
         while (m_bRunning)
         {
                 if (m_pSC55Synth &&
-                    m_pSC55Synth->IsProducerRunning())
+                    m_pSC55Synth->IsProducerRunning() &&
+                    !m_pSC55Synth->IsBufferFull())
                 {
                         m_pSC55Synth->Pump(8192);
                 }
                 else
                 {
-                        CTimer::SimpleMsDelay(1);
+                        // Nothing to produce: rest instead of spinning
+                        Utility::IdleRest(IdleRestMicros, &Diag::nIdleTicks[3]);
                 }
         }
 }

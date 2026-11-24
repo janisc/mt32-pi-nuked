@@ -78,6 +78,55 @@ namespace Utility
 		return nValue && ((nValue & (nValue - 1)) == 0);
 	}
 
+	// Enable the ARM generic timer's event stream on the calling core, which wakes the core
+	// from WFE every ~20 microseconds. Idle loops can then rest (IdleRest()) instead of spinning
+	// at full power, which keeps a fanless Raspberry Pi much cooler. AArch64 only.
+	inline void EnableEventStream()
+	{
+#if AARCH == 64
+		u64 nFrequency;
+		asm volatile ("mrs %0, cntfrq_el0" : "=r" (nFrequency));
+
+		// An event is generated each time the selected counter bit changes from 0 to 1,
+		// i.e. every 2^(bit + 1) ticks; select the bit that gives a period of about 20 us
+		const u64 nTicks      = Max<u64>(nFrequency / 50000, 2);
+		const unsigned nLog2  = 63 - __builtin_clzll(nTicks);
+		const u64 nCounterBit = Min(nLog2 - 1, 15u);
+
+		u64 nControl;
+		asm volatile ("mrs %0, cntkctl_el1" : "=r" (nControl));
+		nControl &= ~(0xFULL << 4 | 1ULL << 3);	// EVNTI, EVNTDIR (0 to 1 transitions)
+		nControl |= nCounterBit << 4 | 1ULL << 2;	// EVNTEN
+		asm volatile ("msr cntkctl_el1, %0" : : "r" (nControl));
+		asm volatile ("isb");
+#endif
+	}
+
+	// Rest in a low-power state for about the given time (needs EnableEventStream() on this core).
+	// WFE alone is not enough: taking a spin lock sets the core's own event register, so the
+	// first WFE after any locking returns at once. Waking early is harmless, as the time is
+	// checked after every event. The time spent resting is added to *pIdleTicks (counter
+	// ticks), if given, to measure how busy the core is.
+	inline void IdleRest(unsigned nMicros, volatile u64* pIdleTicks = nullptr)
+	{
+#if AARCH == 64
+		u64 nFrequency, nStart, nNow;
+		asm volatile ("mrs %0, cntfrq_el0" : "=r" (nFrequency));
+		asm volatile ("isb\n\tmrs %0, cntpct_el0" : "=r" (nStart) : : "memory");
+
+		const u64 nTicks = nFrequency / 1000000 * nMicros;
+		do
+		{
+			asm volatile ("wfe");
+			asm volatile ("isb\n\tmrs %0, cntpct_el0" : "=r" (nNow) : : "memory");
+		}
+		while (nNow - nStart < nTicks);
+
+		if (pIdleTicks)
+			*pIdleTicks += nNow - nStart;
+#endif
+	}
+
 	// Rounds a number to a nearest multiple; only works for integer values/multiples
 	template <class T>
 	constexpr T RoundToNearestMultiple(const T& nValue, const T& nMultiple)
