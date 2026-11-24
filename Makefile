@@ -19,11 +19,13 @@ APPLY_PATCH=sh -c '																\
 	fi' APPLY_PATCH
 
 REVERSE_PATCH=sh -c '																\
-	if patch --dry-run --forward --force --strip 1 --directory $$1 < $$2 >/dev/null 2>&1; then						\
-		echo "Patch $$2 already reversed; skipping";											\
-	else																	\
+	if patch --dry-run --reverse --force --strip 1 --directory $$1 < $$2 >/dev/null 2>&1; then						\
 		echo "Reversing patch $$2 in directory $$1...";											\
 		patch --reverse --strip 1 --no-backup-if-mismatch -r - --directory $$1 < $$2 || (echo "Patch $$2 failed" >&2 && exit 1);	\
+	elif patch --dry-run --forward --force --strip 1 --directory $$1 < $$2 >/dev/null 2>&1; then						\
+		echo "Patch $$2 already reversed; skipping";												\
+	else																		\
+		echo "Patch $$2 failed" >&2 && exit 1;												\
 	fi' REVERSE_PATCH
 
 #
@@ -42,6 +44,7 @@ $(CIRCLE_STDLIB_CONFIG) $(CIRCLE_CONFIG)&:
 	$(CIRCLESTDLIBHOME)/configure --raspberrypi=$(RASPBERRYPI) --prefix=$(PREFIX)
 
 # Apply patches
+	@${APPLY_PATCH} $(CIRCLEHOME) patches/circle-51-sound-underrun-counter.patch
 
 ifeq ($(strip $(GC_SECTIONS)),1)
 # Enable function/data sections for circle-stdlib
@@ -167,6 +170,7 @@ clean:
 #
 mrproper: clean
 # Reverse patches
+	@${REVERSE_PATCH} $(CIRCLEHOME) patches/circle-51-sound-underrun-counter.patch
 	@${REVERSE_PATCH} $(FLUIDSYNTHHOME) patches/fluidsynth-2.6.1-circle.patch
 
 # Clean circle-stdlib

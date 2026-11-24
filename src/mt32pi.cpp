@@ -45,6 +45,8 @@ constexpr u32 LCDUpdatePeriodMillis                = 16;
 constexpr u32 MisterUpdatePeriodMillis             = 50;
 constexpr u32 LEDTimeoutMillis                     = 50;
 constexpr u32 ActiveSenseTimeoutMillis             = 330;
+constexpr u32 UnderrunWarningPeriodMillis          = 5000;
+constexpr unsigned HotTemperatureCelsius           = 80;
 
 constexpr float Sample24BitMax = (1 << (24 - 1)) - 1;
 
@@ -513,6 +515,11 @@ void CMT32Pi::MainTask()
 
 	Awaken();
 
+	// Only warn about audio dropouts that happen from now on, and not while audio starts up
+	unsigned nLastSoundUnderruns   = g_nSoundBaseDeviceUnderruns;
+	size_t nLastSC55Underruns      = SC55GetUnderruns();
+	unsigned int nUnderrunWarnTime = m_pTimer->GetTicks();
+
 
     if (m_bSC55InitializationError)
     {
@@ -552,6 +559,20 @@ void CMT32Pi::MainTask()
 		ProcessEventQueue();
 
 		const unsigned int nTicks = m_pTimer->GetTicks();
+
+		// Warn about audio dropouts, e.g. when the CPU clock is too low for the active synth
+		const unsigned nSoundUnderruns = g_nSoundBaseDeviceUnderruns;
+		const size_t nSC55Underruns    = SC55GetUnderruns();
+		if ((nSoundUnderruns != nLastSoundUnderruns || nSC55Underruns > nLastSC55Underruns) &&
+		    (nTicks - nUnderrunWarnTime) >= MSEC2HZ(UnderrunWarningPeriodMillis))
+		{
+			const bool bSC55 = nSC55Underruns > nLastSC55Underruns;
+			LOGWARN("%s underrun (audio: %u, SC-55: %u)", bSC55 ? "SC-55" : "Audio", nSoundUnderruns, static_cast<unsigned>(nSC55Underruns));
+			LCDLog(TLCDLogType::Warning, bSC55 ? "SC-55 underrun!" : "Audio underrun!");
+			nUnderrunWarnTime = nTicks;
+		}
+		nLastSoundUnderruns = nSoundUnderruns;
+		nLastSC55Underruns  = nSC55Underruns;
 
 		// Update activity LED
 		if (m_bLEDOn && (nTicks - m_nLEDOnTime) >= MSEC2HZ(LEDTimeoutMillis))
@@ -805,7 +826,13 @@ void CMT32Pi::OnExitPowerSavingMode()
 void CMT32Pi::OnThrottleDetected()
 {
 	CPower::OnThrottleDetected();
-	LCDLog(TLCDLogType::Warning, "CPU throttl! Chk PSU");
+
+	// The firmware throttles for heat as well as for low voltage; say which is likely
+	const unsigned nTemperature = CCPUThrottle::Get()->GetTemperature();
+	if (nTemperature >= HotTemperatureCelsius)
+		LCDLog(TLCDLogType::Warning, "CPU hot! %uC", nTemperature);
+	else
+		LCDLog(TLCDLogType::Warning, "CPU throttl! Chk PSU");
 }
 
 void CMT32Pi::OnUnderVoltageDetected()

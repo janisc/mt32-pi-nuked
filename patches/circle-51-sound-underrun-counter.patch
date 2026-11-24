@@ -1,0 +1,46 @@
+Circle Step 51: count sound output underruns
+
+Count the output chunks that CSoundBaseDevice has to pad with silence because
+the application did not write enough data in time (audible dropouts), so that
+applications can warn about them. Not specific to any Raspberry Pi model.
+
+diff --git a/include/circle/sound/soundbasedevice.h b/include/circle/sound/soundbasedevice.h
+index c70d97e..c5b034a 100644
+--- a/include/circle/sound/soundbasedevice.h
++++ b/include/circle/sound/soundbasedevice.h
+@@ -53,6 +53,10 @@ enum TSoundFormat			/// All supported formats are interleaved little endian
+ 
+ typedef void TSoundDataCallback (void *pParam);
+ 
++/// \brief Number of output chunks that had to be padded with silence, because the
++///	   application did not write enough data in time (audible dropouts)
++extern volatile unsigned g_nSoundBaseDeviceUnderruns;
++
+ /// \note There are two methods to provide the sound samples:\n
+ ///	  1. By overloading GetChunk()\n
+ ///	  2. By using Write()
+diff --git a/lib/sound/soundbasedevice.cpp b/lib/sound/soundbasedevice.cpp
+index da0574e..604a76b 100644
+--- a/lib/sound/soundbasedevice.cpp
++++ b/lib/sound/soundbasedevice.cpp
+@@ -22,6 +22,8 @@
+ #include <circle/util.h>
+ #include <assert.h>
+ 
++volatile unsigned g_nSoundBaseDeviceUnderruns = 0;
++
+ CSoundBaseDevice::CSoundBaseDevice (void)
+ :	m_HWFormat (SoundFormatUnknown),
+ 	m_nQueueSize (0),
+@@ -803,6 +805,11 @@ unsigned CSoundBaseDevice::GetChunkInternal (void *pBuffer, unsigned nChunkSize)
+ 
+ 	m_SpinLock.Release ();
+ 
++	if (nBytes < nChunkSizeBytes)
++	{
++		g_nSoundBaseDeviceUnderruns++;
++	}
++
+ 	while (nBytes < nChunkSizeBytes)
+ 	{
+ 		memcpy (pBuffer8, m_NullFrame, m_nHWTXFrameSize);
