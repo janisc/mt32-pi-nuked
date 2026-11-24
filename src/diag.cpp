@@ -35,6 +35,7 @@
 #include <fatfs/ff.h>
 
 #include <climits>
+#include <cmath>
 #include <cstdio>
 
 #include "synth/sc55synth.h"
@@ -56,6 +57,61 @@ namespace Diag
 	volatile u32 nLCDErrors  = 0;
 
 	volatile u64 nIdleTicks[MaxCores] = { 0 };
+
+	// Synth output level since the last LogAudioLevel() (written by the audio task on core 2)
+	volatile float fWindowPeak       = 0.0f;
+	volatile float fWindowSumSquares = 0.0f;
+	volatile u32 nWindowSamples      = 0;
+	volatile u32 nWindowOver         = 0;
+
+	// Whole-session statistics per synth
+	float fSessionPeak[MaxSynths] = { 0.0f };
+	u32 nSessionOver[MaxSynths]   = { 0 };
+
+	void RecordAudioLevel(float fPeak, float fSumSquares, u32 nSamples, u32 nOverSamples)
+	{
+		if (fPeak > fWindowPeak)
+			fWindowPeak = fPeak;
+		fWindowSumSquares += fSumSquares;
+		nWindowSamples += nSamples;
+		nWindowOver += nOverSamples;
+	}
+
+	// Format a linear level (1.0 = full scale) as dBFS
+	void FormatLevel(char* pBuffer, size_t nSize, float fLevel)
+	{
+		if (fLevel < 0.00001f)
+			snprintf(pBuffer, nSize, "silent");
+		else
+			snprintf(pBuffer, nSize, "%+.1fdBFS", 20.0f * log10f(fLevel));
+	}
+
+	void LogAudioLevel(unsigned nSynth, const char* pSynthName)
+	{
+		// Read and reset the window; a block recorded in between may be lost (harmless)
+		const float fPeak = fWindowPeak;
+		const float fRMS  = nWindowSamples ? sqrtf(fWindowSumSquares / nWindowSamples) : 0.0f;
+		const u32 nOver   = nWindowOver;
+		fWindowPeak       = 0.0f;
+		fWindowSumSquares = 0.0f;
+		nWindowSamples    = 0;
+		nWindowOver       = 0;
+
+		if (nSynth >= MaxSynths)
+			return;
+
+		if (fPeak > fSessionPeak[nSynth])
+			fSessionPeak[nSynth] = fPeak;
+		nSessionOver[nSynth] += nOver;
+
+		char Peak[16], RMS[16], SessionPeak[16];
+		FormatLevel(Peak, sizeof(Peak), fPeak);
+		FormatLevel(RMS, sizeof(RMS), fRMS);
+		FormatLevel(SessionPeak, sizeof(SessionPeak), fSessionPeak[nSynth]);
+
+		LOGNOTE("level %s peak=%s rms=%s over=%u (session: max %s, over %u)",
+			pSynthName, Peak, RMS, nOver, SessionPeak, nSessionOver[nSynth]);
+	}
 
 	constexpr size_t MaxLineLength = 128;
 	constexpr size_t LogRingSize   = 64 * 1024;

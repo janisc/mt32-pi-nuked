@@ -56,6 +56,15 @@ namespace Diag
 	// Log all counters on one line
 	void LogStatus();
 
+	// Record the peak level (1.0 = full scale), the sum of the squared samples and the number of
+	// samples over full scale of one block of synth output; called by the audio task
+	void RecordAudioLevel(float fPeak, float fSumSquares, u32 nSamples, u32 nOverSamples);
+
+	// Log the peak and average (RMS) level of the given synth since the last call, and its highest
+	// peak and total samples over full scale for the whole session; nSynth indexes the latter
+	constexpr unsigned MaxSynths = 4;
+	void LogAudioLevel(unsigned nSynth, const char* pSynthName);
+
 	// Create/truncate the log file; call once the SD card is mounted
 	bool OpenLogFile();
 

@@ -26,6 +26,7 @@
 #include <circle/sound/i2ssoundbasedevice.h>
 #include <circle/sound/pwmsoundbasedevice.h>
 
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -545,6 +546,16 @@ void CMT32Pi::MainTask()
 
 	LOGNOTE("Main task on Core 0 starting up");
 
+	// Record the gain settings, for comparing the output levels in the log file
+	if (m_pConfig->SystemLogFile)
+	{
+		char Gains[96];
+		snprintf(Gains, sizeof(Gains), "gain munt=%.2f munt_reverb=%.2f nuked_mt32=%.2f soundfont=%.2f sc55=%.2f",
+			m_pConfig->MT32EmuGain, m_pConfig->MT32EmuReverbGain, m_pConfig->NukedMT32Gain,
+			m_pConfig->FluidSynthDefaultGain, m_pConfig->SC55Gain);
+		LOGNOTE("%s", Gains);
+	}
+
 	Utility::EnableEventStream();
 
 	Awaken();
@@ -604,6 +615,14 @@ void CMT32Pi::MainTask()
 			if (nTicks - s_nDiagStatusTime >= MSEC2HZ(5000))
 			{
 				Diag::LogStatus();
+
+				// Output level of the active synth since the last status line
+				const CSynthBase* const Synths[Diag::MaxSynths] = { m_pMT32Synth, m_pNukedMT32Synth, m_pSoundFontSynth, m_pSC55Synth };
+				const char* const SynthNames[Diag::MaxSynths]   = { "Munt", "Nuked-MT32", "SoundFont", "SC-55" };
+				for (unsigned i = 0; i < Diag::MaxSynths; ++i)
+					if (Synths[i] && Synths[i] == m_pCurrentSynth)
+						Diag::LogAudioLevel(i, SynthNames[i]);
+
 				s_nDiagStatusTime = nTicks;
 			}
 
@@ -822,6 +841,24 @@ void CMT32Pi::AudioTask()
 		}
 
 		m_pCurrentSynth->Render(FloatBuffer, nFrames);
+
+		// Measure the output level for the log file; samples over full scale are saturated by
+		// the conversion below
+		if (m_pConfig->SystemLogFile)
+		{
+			float fPeak = 0.0f;
+			float fSumSquares = 0.0f;
+			u32 nOverSamples = 0;
+			for (size_t i = 0; i < nFrames * nChannels; ++i)
+			{
+				const float fLevel = fabsf(FloatBuffer[i]);
+				fPeak = Utility::Max(fPeak, fLevel);
+				fSumSquares += fLevel * fLevel;
+				if (fLevel > 1.0f)
+					++nOverSamples;
+			}
+			Diag::RecordAudioLevel(fPeak, fSumSquares, nFrames * nChannels, nOverSamples);
+		}
 
 		if (bReversedStereo)
 		{
