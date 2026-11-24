@@ -84,6 +84,9 @@ protected:
 	// Double framebuffers
 	TFrameBufferUpdatePacket m_FrameBuffers[2];
 	u8 m_nCurrentFrameBuffer;
+
+	// Set when a framebuffer transfer failed, so the next update is sent even if unchanged
+	mutable bool m_bResendFrameBuffer;
 };
 
 class CSH1106 : public CSSD1306

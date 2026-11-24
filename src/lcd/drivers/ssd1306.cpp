@@ -157,7 +157,8 @@ CSSD1306::CSSD1306(CI2CMaster* pI2CMaster, u8 nAddress, u8 nWidth, u8 nHeight, T
 	  m_Mirror(Mirror),
 
 	  m_FrameBuffers{{0x40, {0}}, {0x40, {0}}},
-	  m_nCurrentFrameBuffer(0)
+	  m_nCurrentFrameBuffer(0),
+	  m_bResendFrameBuffer(false)
 {
 }
 
@@ -227,11 +228,25 @@ void CSSD1306::WriteFrameBuffer(bool bForceFullUpdate) const
 
 	// Compare two framebuffers
 	const size_t nFrameBufferSize = m_nWidth * m_nHeight / 8;
-	const bool bNeedsUpdate = bForceFullUpdate || memcmp(m_FrameBuffers[0].FrameBuffer, m_FrameBuffers[1].FrameBuffer, nFrameBufferSize) != 0;
+	const bool bNeedsUpdate = bForceFullUpdate || m_bResendFrameBuffer || memcmp(m_FrameBuffers[0].FrameBuffer, m_FrameBuffers[1].FrameBuffer, nFrameBufferSize) != 0;
 
-	// Copy entire framebuffer
-	if (bNeedsUpdate)
-		m_pI2CMaster->Write(m_nAddress, &m_FrameBuffers[m_nCurrentFrameBuffer], sizeof(TFrameBufferUpdatePacket::DataControlByte) + nFrameBufferSize);
+	if (!bNeedsUpdate)
+		return;
+
+	// Reset the display RAM address; an interrupted transfer (e.g. the I2C bus being disturbed by
+	// a MiSTer core reload) would otherwise leave it mid-frame and shift every following frame
+	const u8 AddressSequence[] =
+	{
+		SetColumnAddress,	0x00,	static_cast<u8>(m_nWidth - 1),
+		SetPageAddress,		0x00,	static_cast<u8>(m_nHeight / 8 - 1),
+	};
+
+	for (u8 nCommand : AddressSequence)
+		WriteCommand(nCommand);
+
+	// Copy entire framebuffer; resend it on the next update if the transfer failed
+	const int nResult = m_pI2CMaster->Write(m_nAddress, &m_FrameBuffers[m_nCurrentFrameBuffer], sizeof(TFrameBufferUpdatePacket::DataControlByte) + nFrameBufferSize);
+	m_bResendFrameBuffer = nResult < 0;
 }
 
 void CSSD1306::SwapFrameBuffers()
