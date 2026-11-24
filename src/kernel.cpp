@@ -32,7 +32,8 @@
 CKernel::CKernel(void)
 	: CStdlibApp("mt32-pi"),
 
-	  m_Serial(&mInterrupt, true),
+	  // Explicitly select UART0 on GPIO 14/15; on the Pi 5 the default is the debug UART connector
+	  m_Serial(&mInterrupt, true, 0),
 #ifdef HDMI_CONSOLE
 	  m_Screen(mOptions.GetWidth(), mOptions.GetHeight()),
 #endif
@@ -105,6 +106,12 @@ bool CKernel::Initialize(void)
 	// Init serial port for MIDI with preferred baud rate if not used for logging
 	if (bSerialMIDIAvailable && !m_Serial.Initialize(m_Config.MIDIGPIOBaudRate))
 		return false;
+
+#if RASPPI >= 5
+	// The Pi 5's RP1 I2C controller must be disabled and configured by Initialize() before use
+	if (!m_I2CMaster.Initialize())
+		m_Logger.Write(GetKernelName(), LogError, "Failed to initialize I2C");
+#endif
 
 	// Init I2C; don't bother with Initialize() as it only sets the clock to 100/400KHz
 	m_I2CMaster.SetClock(m_Config.SystemI2CBaudRate);
