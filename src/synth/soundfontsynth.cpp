@@ -357,6 +357,8 @@ bool CSoundFontSynth::SwitchSoundFont(size_t nIndex)
 	if (m_pUI)
 		m_pUI->ShowSystemMessage("Loading SoundFont", true);
 
+	LOGNOTE("Loading SoundFont %u", nIndex);
+
 	TFXProfile FXProfile = m_SoundFontManager.GetSoundFontFXProfile(nIndex);
 
 	// We can't use fluid_synth_sfunload() as we don't support the lazy SoundFont unload timer, so trash the entire synth and create a new one

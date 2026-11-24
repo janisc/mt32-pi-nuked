@@ -27,7 +27,10 @@
 #include <circle/sound/pwmsoundbasedevice.h>
 
 #include <cstdarg>
+#include <cstdio>
+#include <cstring>
 
+#include "diag.h"
 #include "lcd/drivers/hd44780.h"
 #include "lcd/drivers/ssd1306.h"
 #include "lcd/ui.h"
@@ -49,6 +52,31 @@ constexpr u32 UnderrunWarningPeriodMillis          = 5000;
 constexpr unsigned HotTemperatureCelsius           = 80;
 
 constexpr float Sample24BitMax = (1 << (24 - 1)) - 1;
+
+#ifdef DIAG_LCD
+constexpr u32 DiagLCDUpdatePeriodMillis            = 250;
+
+// Line 0: core 0/core 2 loop counters (changing = alive) and MiSTer I2C errors
+// Line 1: MIDI bytes received and UART errors
+// Lines 2-3: most recent log message
+static void DrawDiagLCD(CLCD& LCD)
+{
+	char Line[64];
+
+	snprintf(Line, sizeof(Line), "0:%04u 2:%04u i:%u", Diag::nCore0Loops % 10000, Diag::nCore2Loops % 10000, Diag::nI2CErrors);
+	LCD.Print(Line, 0, 0, true, false);
+
+	snprintf(Line, sizeof(Line), "midi:%u e:%u", Diag::nMIDIBytes, Diag::nUARTErrors);
+	LCD.Print(Line, 0, 1, true, false);
+
+	char LogLine[128];
+	Diag::GetLastLogLine(LogLine, sizeof(LogLine));
+	LCD.Print(LogLine, 0, 2, true, false);
+	LCD.Print(strlen(LogLine) > 20 ? LogLine + 20 : "", 0, 3, true, false);
+
+	LCD.Flip();
+}
+#endif
 
 enum class TCustomSysExCommand : u8
 {
@@ -544,6 +572,7 @@ void CMT32Pi::MainTask()
 
 	while (m_bRunning)
 	{
+		DIAG_INC(nCore0Loops);
 
 		// Process MIDI data
 		UpdateMIDI();
@@ -559,6 +588,25 @@ void CMT32Pi::MainTask()
 		ProcessEventQueue();
 
 		const unsigned int nTicks = m_pTimer->GetTicks();
+
+		// Log file (log_file = on): log all counters every 5 seconds and write the log to the SD card every 2 seconds
+		if (m_pConfig->SystemLogFile)
+		{
+			static unsigned int s_nDiagStatusTime = 0;
+			static unsigned int s_nDiagFlushTime  = 0;
+
+			if (nTicks - s_nDiagStatusTime >= MSEC2HZ(5000))
+			{
+				Diag::LogStatus();
+				s_nDiagStatusTime = nTicks;
+			}
+
+			if (nTicks - s_nDiagFlushTime >= MSEC2HZ(2000))
+			{
+				Diag::FlushLogFile();
+				s_nDiagFlushTime = nTicks;
+			}
+		}
 
 		// Warn about audio dropouts, e.g. when the CPU clock is too low for the active synth
 		const unsigned nSoundUnderruns = g_nSoundBaseDeviceUnderruns;
@@ -658,11 +706,19 @@ void CMT32Pi::UITask()
 		const unsigned int nTicks = CTimer::GetClockTicks();
 
 		// Update LCD
+#ifdef DIAG_LCD
+		if (m_pLCD && (nTicks - m_nLCDUpdateTime) >= Utility::MillisToTicks(DiagLCDUpdatePeriodMillis))
+		{
+			DrawDiagLCD(*m_pLCD);
+			m_nLCDUpdateTime = nTicks;
+		}
+#else
 		if (m_pLCD && (nTicks - m_nLCDUpdateTime) >= Utility::MillisToTicks(LCDUpdatePeriodMillis))
 		{
 			m_UserInterface.Update(*m_pLCD, *m_pCurrentSynth, nTicks);
 			m_nLCDUpdateTime = nTicks;
 		}
+#endif
 
 		// Poll MiSTer interface
 		if (bMisterEnabled && (nTicks - m_nMisterUpdateTime) >= Utility::MillisToTicks(MisterUpdatePeriodMillis))
@@ -737,6 +793,8 @@ void CMT32Pi::AudioTask()
 
 	while (m_bRunning)
 	{
+		DIAG_INC(nCore2Loops);
+
 		const size_t nFrames = nQueueSizeFrames - m_pSound->GetQueueFramesAvail();
 		const size_t nWriteBytes = nFrames * nBytesPerFrame;
 
@@ -1159,6 +1217,8 @@ size_t CMT32Pi::ReceiveSerialMIDI(u8* pOutData, size_t nSize)
 	// Error
 	if (nResult < 0)
 	{
+		DIAG_INC(nUARTErrors);
+
 		if (m_pConfig->SystemVerbose)
 		{
 			const char* pErrorString;
@@ -1187,6 +1247,8 @@ size_t CMT32Pi::ReceiveSerialMIDI(u8* pOutData, size_t nSize)
 
 		return 0;
 	}
+
+	DIAG_ADD(nMIDIBytes, nResult);
 
 	// Replay received MIDI data out via the serial port ('software thru')
 	if (m_pConfig->MIDIGPIOThru)

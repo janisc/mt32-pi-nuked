@@ -23,6 +23,7 @@
 #include <circle/logger.h>
 
 #include "control/mister.h"
+#include "diag.h"
 
 LOGMODULE("mistercontrol");
 
@@ -44,10 +45,21 @@ void CMisterControl::Update(const TMisterStatus& SystemStatus)
 
 	// Read current status from MiSTer
 	TMisterStatus MisterStatus;
-	if (m_pI2CMaster->Read(MisterI2CAddress, &MisterStatus, sizeof(MisterStatus)) < 0)
+	const int nResult = m_pI2CMaster->Read(MisterI2CAddress, &MisterStatus, sizeof(MisterStatus));
+	if (nResult < 0)
 	{
+		DIAG_INC(nI2CErrors);
+		Diag::LogI2CFailure("MiSTer read", nResult, Diag::nI2CErrors);
 		ResetState();
 		return;
+	}
+
+	// Log every change of the status reported by the MiSTer
+	static TMisterStatus s_LastLoggedStatus{TMisterSynth::Unknown, 0xFF, 0xFF};
+	if (MisterStatus != s_LastLoggedStatus)
+	{
+		LOGNOTE("rx %02x r%u s%u", static_cast<u8>(MisterStatus.Synth), MisterStatus.MT32ROMSet, MisterStatus.SoundFontIndex);
+		s_LastLoggedStatus = MisterStatus;
 	}
 
 	//LOGDBG("MiSTer Rx: 0x%02x 0x%02x 0x%02x", static_cast<u8>(MisterStatus.Synth), MisterStatus.MT32ROMSet, MisterStatus.SoundFontIndex);
@@ -111,6 +123,8 @@ void CMisterControl::ApplyConfig(const TMisterStatus& NewStatus, const TMisterSt
 {
 	TEvent Event;
 
+	LOGNOTE("apply %02x r%u s%u", static_cast<u8>(NewStatus.Synth), NewStatus.MT32ROMSet, NewStatus.SoundFontIndex);
+
 	if (NewStatus.Synth != CurrentStatus.Synth)
 	{
 		Event.Type = TEventType::SwitchSynth;
@@ -136,8 +150,11 @@ void CMisterControl::ApplyConfig(const TMisterStatus& NewStatus, const TMisterSt
 bool CMisterControl::WriteConfigToMister(const TMisterStatus& NewStatus)
 {
 	// Write config back to MiSTer
-	if (m_pI2CMaster->Write(MisterI2CAddress, &NewStatus, sizeof(NewStatus)) < 0)
+	const int nResult = m_pI2CMaster->Write(MisterI2CAddress, &NewStatus, sizeof(NewStatus));
+	if (nResult < 0)
 	{
+		DIAG_INC(nI2CErrors);
+		Diag::LogI2CFailure("MiSTer write", nResult, Diag::nI2CErrors);
 		LOGERR("MiSTer write failed");
 		return false;
 	}

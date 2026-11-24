@@ -22,6 +22,7 @@
 
 #include <type_traits>
 
+#include "diag.h"
 #include "lcd/drivers/ssd1306.h"
 #include "lcd/font6x8.h"
 #include "lcd/images.h"
@@ -247,6 +248,12 @@ void CSSD1306::WriteFrameBuffer(bool bForceFullUpdate) const
 	// Copy entire framebuffer; resend it on the next update if the transfer failed
 	const int nResult = m_pI2CMaster->Write(m_nAddress, &m_FrameBuffers[m_nCurrentFrameBuffer], sizeof(TFrameBufferUpdatePacket::DataControlByte) + nFrameBufferSize);
 	m_bResendFrameBuffer = nResult < 0;
+
+	if (nResult < 0)
+	{
+		DIAG_INC(nLCDErrors);
+		Diag::LogI2CFailure("LCD frame", nResult, Diag::nLCDErrors);
+	}
 }
 
 void CSSD1306::SwapFrameBuffers()

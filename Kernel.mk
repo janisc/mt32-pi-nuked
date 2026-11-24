@@ -10,6 +10,7 @@ OBJS		:=	src/config.o \
 			src/control/rotaryencoder.o \
 			src/control/simplebuttons.o \
 			src/control/simpleencoder.o \
+			src/diag.o \
 			src/kernel.o \
 			src/lcd/drivers/hd44780.o \
 			src/lcd/drivers/hd44780fourbit.o \
@@ -86,6 +87,11 @@ LIBS 		:=	$(CIRCLE_STDLIB_LIBS) \
 
 ifeq ($(HDMI_CONSOLE), 1)
 DEFINE		+=	-D HDMI_CONSOLE
+endif
+
+# On-screen diagnostics instead of the normal LCD UI (the log file is a config option: log_file)
+ifeq ($(DIAG), 1)
+DEFINE		+=	-D DIAG_LCD
 endif
 
 -include $(DEPS)

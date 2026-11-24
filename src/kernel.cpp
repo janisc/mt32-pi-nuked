@@ -21,6 +21,7 @@
 //
 
 #include "config.h"
+#include "diag.h"
 #include "kernel.h"
 
 #ifndef MT32_PI_VERSION
@@ -70,7 +71,11 @@ bool CKernel::Initialize(void)
 	if (!pLogTarget)
 		pLogTarget = &mNullDevice;
 
-	if (!m_Logger.Initialize(pLogTarget))
+	// Buffer the log for the optional log file and on-screen diagnostics, passing it on to the log device
+	static CDiagLogDevice DiagLogDevice;
+	DiagLogDevice.SetForwardDevice(pLogTarget);
+
+	if (!m_Logger.Initialize(&DiagLogDevice))
 		return false;
 
 	if (!m_Timer.Initialize())
@@ -88,6 +93,10 @@ bool CKernel::Initialize(void)
 	// Load configuration file
 	if (!m_Config.Initialize("mt32-pi.cfg"))
 		m_Logger.Write(GetKernelName(), LogWarning, "Unable to find or parse config file; using defaults");
+
+	// Optional log file; also receives the messages logged so far
+	if (m_Config.SystemLogFile && !Diag::OpenLogFile())
+		m_Logger.Write(GetKernelName(), LogError, "Failed to create log file");
 
 	// Init serial port for MIDI with preferred baud rate if not used for logging
 	if (bSerialMIDIAvailable && !m_Serial.Initialize(m_Config.MIDIGPIOBaudRate))
