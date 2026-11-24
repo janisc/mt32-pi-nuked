@@ -29,7 +29,11 @@ constexpr u16 PollRateMicros = 1000;
 
 CControl::CControl(TEventQueue& pEventQueue)
 	: m_pEventQueue(&pEventQueue),
+#if RASPPI <= 4
 	  m_Timer(CInterruptSystem::Get(), InterruptHandler, this),
+#else
+	  m_nLastPollTime(0),
+#endif
 
 	  m_ButtonStateHistory{0},
 	  m_nButtonStateHistoryIndex(0),
@@ -43,16 +47,36 @@ CControl::CControl(TEventQueue& pEventQueue)
 
 bool CControl::Initialize()
 {
+#if RASPPI <= 4
 	if (!m_Timer.Initialize())
 		return false;
 
 	m_Timer.Start(PollRateMicros);
+#else
+	// Fill the debounce history with the current pin states now; it starts out as "all pressed",
+	// which Update() would otherwise report as button presses when polling begins
+	for (size_t i = 0; i < ButtonStateHistoryLength; ++i)
+		ReadGPIOPins();
+
+	m_nLastButtonState = m_nButtonState;
+	m_nLastPollTime = CTimer::GetClockTicks();
+#endif
 
 	return true;
 }
 
 void CControl::Update()
 {
+#if RASPPI >= 5
+	// Poll at the same rate as the user timer on earlier models
+	const u32 nPollTicks = CTimer::GetClockTicks();
+	if (nPollTicks - m_nLastPollTime >= PollRateMicros)
+	{
+		m_nLastPollTime = nPollTicks;
+		ReadGPIOPins();
+	}
+#endif
+
 	TEvent Event;
 
 	if (m_nButtonState != m_nLastButtonState)
@@ -121,6 +145,7 @@ void CControl::DebounceButtonState(u8 nState, u8 nMask)
 	m_nButtonState = (~nDebouncedButtonState) & nMask;
 }
 
+#if RASPPI <= 4
 void CControl::InterruptHandler(CUserTimer* pUserTimer, void* pParam)
 {
 	CControl* const pThis = static_cast<CControl*>(pParam);
@@ -129,3 +154,4 @@ void CControl::InterruptHandler(CUserTimer* pUserTimer, void* pParam)
 	pUserTimer->Start(PollRateMicros);
 	pThis->ReadGPIOPins();
 }
+#endif

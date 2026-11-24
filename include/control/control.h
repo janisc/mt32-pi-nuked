@@ -25,7 +25,9 @@
 
 #include <circle/gpiopin.h>
 #include <circle/types.h>
+#if RASPPI <= 4
 #include <circle/usertimer.h>
+#endif
 
 #include "control/rotaryencoder.h"
 #include "event.h"
@@ -43,7 +45,7 @@ public:
 	u8 GetButtonState() const { return m_nButtonState; }
 
 protected:
-	// Called from interrupt context
+	// Called from interrupt context (from Update() on the Pi 5)
 	virtual void ReadGPIOPins() = 0;
 
 	void DebounceButtonState(u8 nState, u8 nMask);
@@ -58,7 +60,12 @@ protected:
 	static constexpr u32 MinRepeatPeriodMicros = 20000;	// 50Hz
 
 	TEventQueue* m_pEventQueue;
+#if RASPPI <= 4
 	CUserTimer m_Timer;
+#else
+	// Circle has no CUserTimer on the Pi 5; GPIOs are polled from Update() instead
+	u32 m_nLastPollTime;
+#endif
 
 	// Debouncing
 	u8 m_ButtonStateHistory[ButtonStateHistoryLength];
@@ -85,7 +92,9 @@ protected:
 		);
 	}
 
+#if RASPPI <= 4
 	static void InterruptHandler(CUserTimer* pUserTimer, void* pParam);
+#endif
 };
 
 class CControlSimpleButtons : public CControl
