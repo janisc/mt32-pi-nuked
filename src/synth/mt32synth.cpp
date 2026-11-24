@@ -23,6 +23,8 @@
 #include <circle/logger.h>
 #include <circle/timer.h>
 
+#include <cstdio>
+
 #include "config.h"
 #include "lcd/ui.h"
 #include "synth/mt32synth.h"
@@ -175,8 +177,13 @@ size_t CMT32Synth::Render(float* pOutBuffer, size_t nFrames)
 
 void CMT32Synth::ReportStatus() const
 {
-	if (m_pUI)
-		m_pUI->ShowSystemMessage(GetControlROMName());
+	if (!m_pUI)
+		return;
+
+	// Name the emulator so Munt can be told apart from Nuked-MT32
+	char Message[64];
+	snprintf(Message, sizeof(Message), "Munt %s", GetControlROMName());
+	m_pUI->ShowSystemMessage(Message);
 }
 
 void CMT32Synth::UpdateLCD(CLCD& LCD, unsigned int nTicks)
