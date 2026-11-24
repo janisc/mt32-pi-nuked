@@ -8,6 +8,8 @@ SC55BUILDDIR="$ROOT/build-sc55"
 CXX="${CXX:-aarch64-none-elf-g++}"
 AR="${AR:-aarch64-none-elf-ar}"
 
+# Note: -ffreestanding is not used; GCC 13+ rejects hosted C++ headers with it,
+# and the core is linked against circle-newlib's C library anyway.
 CXXFLAGS="-DNUKED_SC55_HEADLESS \
 -DNUKED_SC55_HEADLESS_MK2_ONLY \
 -DNUKED_SC55_HEADLESS_CYCLES_PER_STEP=24 \
@@ -18,7 +20,6 @@ CXXFLAGS="-DNUKED_SC55_HEADLESS \
 -fno-unwind-tables \
 -fno-asynchronous-unwind-tables \
 -mcpu=cortex-a72+crc+simd \
--ffreestanding \
 -fno-exceptions \
 -fno-rtti \
 -fno-threadsafe-statics \

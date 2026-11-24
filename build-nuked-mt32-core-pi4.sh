@@ -11,11 +11,12 @@ RANLIB="${RANLIB:-aarch64-none-elf-ranlib}"
 NM="${NM:-aarch64-none-elf-nm}"
 SIZE="${SIZE:-aarch64-none-elf-size}"
 
+# Note: -ffreestanding is not used; GCC 13+ rejects hosted C++ headers with it,
+# and the core is linked against circle-newlib's C library anyway.
 COMMON_FLAGS=(
     -std=gnu++17
     -O2
     -mcpu=cortex-a72
-    -ffreestanding
     -DNUKED_MT32_BAREMETAL
     -fno-exceptions
     -fno-rtti

@@ -360,8 +360,7 @@ const TDirectoryListEntry* CFTPWorker::BuildDirectoryList(size_t& nOutEntries) c
 		for (size_t i = 0; i < nVolumes; ++i)
 		{
 			char VolumeName[6];
-			strncpy(VolumeName, VolumeNames[i], sizeof(VolumeName));
-			strcat(VolumeName, ":");
+			snprintf(VolumeName, sizeof(VolumeName), "%s:", VolumeNames[i]);
 
 			// Returns FR_
 			if ((Result = f_opendir(&Dir, VolumeName)) == FR_OK)
