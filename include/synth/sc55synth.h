@@ -20,7 +20,8 @@ class CSC55Synth
       private SRCTools::FloatSampleProvider
 {
 public:
-        explicit CSC55Synth(unsigned nSampleRate, TSC55Model Model, bool bDebug);
+        // nBufferMillis: how far the emulation runs ahead of playback (latency); 0 = automatic
+        CSC55Synth(unsigned nSampleRate, TSC55Model Model, bool bDebug, unsigned nBufferMillis);
         virtual ~CSC55Synth() override;
 
         // CSynthBase
@@ -28,6 +29,7 @@ public:
         void Pump(size_t nMaxSteps);
         void StopProducer();
         bool IsProducerRunning() const { return m_bProducerRunning; }
+        bool IsBufferFull() const;
         virtual void HandleMIDIShortMessage(u32 nMessage) override;
         virtual void HandleMIDISysExMessage(const u8* pData, size_t nSize) override;
         virtual bool IsActive() override { return m_bInitialized; }
@@ -78,5 +80,12 @@ private:
         float m_MkIIAnalogR2;
         float m_MkIIAnalogR3;
 };
+
+// Number of times the producer could not keep up (output padded); reset when the ring is cleared
+size_t SC55GetUnderruns();
+
+// Configured buffer size, and the lowest buffer level during playback since the last call
+// (UINT_MAX if nothing was played)
+void SC55GetBufferStats(unsigned& nBufferMillis, unsigned& nLowWaterMillis);
 
 #endif

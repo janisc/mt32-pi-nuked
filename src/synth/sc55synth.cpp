@@ -5,6 +5,8 @@
 //
 
 #include <fatfs/ff.h>
+#include <climits>
+#include <cstdint>
 #include <cstring>
 #include <stdio.h>
 
@@ -50,7 +52,16 @@ extern "C"
 namespace
 {
         constexpr size_t SC55RingFrames = 131072;
-        constexpr size_t SC55PrebufferFrames = 512;
+
+        // How far the producer runs ahead of playback, i.e. the SC-55's latency, and the
+        // playback start/stop thresholds; set from the buffer_ms option by SC55SetupBuffer()
+        size_t g_SC55PrebufferFrames = 512;
+        size_t g_SC55StartThreshold = 128;
+        size_t g_SC55StopThreshold = 32;
+        unsigned g_SC55NativeSampleRate = 66207;
+
+        // Lowest ring fill level seen during playback since the last query (diagnostics)
+        volatile size_t g_SC55LowWaterFrames = SIZE_MAX;
 
         short g_SC55RingLeft[SC55RingFrames];
         short g_SC55RingRight[SC55RingFrames];
@@ -125,6 +136,53 @@ namespace
 }
 }
 
+size_t SC55GetUnderruns()
+{
+        return g_SC55Underruns;
+}
+
+void SC55GetBufferStats(unsigned& nBufferMillis, unsigned& nLowWaterMillis)
+{
+        nBufferMillis = g_SC55PrebufferFrames * 1000 / g_SC55NativeSampleRate;
+
+        const size_t nLowWaterFrames = g_SC55LowWaterFrames;
+        g_SC55LowWaterFrames = SIZE_MAX;
+        nLowWaterMillis = nLowWaterFrames == SIZE_MAX ? UINT_MAX : nLowWaterFrames * 1000 / g_SC55NativeSampleRate;
+}
+
+// Size the buffer between the SC-55 producer and playback. 0 = automatic: 512 frames
+// (about 8 ms) on models before the Pi 5, 30 ms on the Pi 5.
+static void SC55SetupBuffer(unsigned nBufferMillis, unsigned nNativeSampleRate)
+{
+        g_SC55NativeSampleRate = nNativeSampleRate;
+
+#if RASPPI <= 4
+        if (nBufferMillis == 0)
+        {
+                g_SC55PrebufferFrames = 512;
+                g_SC55StartThreshold = 128;
+                g_SC55StopThreshold = 32;
+                return;
+        }
+#else
+        if (nBufferMillis == 0)
+                nBufferMillis = 30;
+#endif
+
+        nBufferMillis = Utility::Clamp(nBufferMillis, 20u, 1000u);
+        g_SC55PrebufferFrames = static_cast<size_t>(nBufferMillis) * nNativeSampleRate / 1000;
+
+        // Never stop below 512 frames (about 1.5 output chunks at chunk_size = 256), so that
+        // an underrun is detected before playback runs dry
+        g_SC55StopThreshold = Utility::Max<size_t>(g_SC55PrebufferFrames / 32, 512);
+        g_SC55StartThreshold = Utility::Min<size_t>(Utility::Max<size_t>(g_SC55PrebufferFrames / 8, 2 * g_SC55StopThreshold), g_SC55PrebufferFrames);
+}
+
+bool CSC55Synth::IsBufferFull() const
+{
+        return SC55RingCount() >= g_SC55PrebufferFrames;
+}
+
 
 class CSC55ProducerTask : public CTask
 {
@@ -177,7 +235,8 @@ extern "C" void SC55_LinkProbe(void)
 CSC55Synth::CSC55Synth(
         unsigned nSampleRate,
         TSC55Model Model,
-        bool bDebug)
+        bool bDebug,
+        unsigned nBufferMillis)
         : CSynthBase(nSampleRate),
           m_pProducerTask(nullptr),
           m_bProducerRunning(false),
@@ -205,6 +264,13 @@ CSC55Synth::CSC55Synth(
           m_MkIIAnalogR2(0.0f),
           m_MkIIAnalogR3(0.0f)
 {
+        SC55SetupBuffer(nBufferMillis, m_nNativeSampleRate);
+
+        LOGNOTE("Buffer: %u ms (%u frames), start %u, stop %u",
+                static_cast<unsigned>(g_SC55PrebufferFrames * 1000 / m_nNativeSampleRate),
+                static_cast<unsigned>(g_SC55PrebufferFrames),
+                static_cast<unsigned>(g_SC55StartThreshold),
+                static_cast<unsigned>(g_SC55StopThreshold));
 }
 
 CSC55Synth::~CSC55Synth()
@@ -703,7 +769,7 @@ void CSC55Synth::Pump(size_t nMaxSteps)
         size_t nStepsRemaining = nMaxSteps;
 
         while (nStepsRemaining > 0 &&
-               SC55RingCount() < SC55PrebufferFrames)
+               SC55RingCount() < g_SC55PrebufferFrames)
         {
                 const size_t nRunSteps =
                     nStepsRemaining < RunBatchSteps
@@ -747,7 +813,7 @@ void CSC55Synth::Pump(size_t nMaxSteps)
                         }
 
                         if (nBatchCount < SampleBatchFrames ||
-                            SC55RingCount() >= SC55PrebufferFrames)
+                            SC55RingCount() >= g_SC55PrebufferFrames)
                         {
                                 break;
                         }
@@ -790,12 +856,11 @@ size_t CSC55Synth::Render(s16* pOutBuffer, size_t nFrames)
                 return nFrames;
         }
 
-        constexpr size_t StartThreshold = 128;
-        constexpr size_t StopThreshold = 32;
+        const size_t nRingCount = SC55RingCount();
 
         if (!m_bOutputEnabled)
         {
-                if (SC55RingCount() >= StartThreshold)
+                if (nRingCount >= g_SC55StartThreshold)
                         m_bOutputEnabled = true;
                 else
                 {
@@ -803,7 +868,7 @@ size_t CSC55Synth::Render(s16* pOutBuffer, size_t nFrames)
                         return nFrames;
                 }
         }
-        else if (SC55RingCount() < StopThreshold)
+        else if (nRingCount < g_SC55StopThreshold)
         {
                 m_bOutputEnabled = false;
                 ++g_SC55Underruns;
@@ -857,12 +922,11 @@ size_t CSC55Synth::Render(float* pOutBuffer, size_t nFrames)
                 return nFrames;
         }
 
-        constexpr size_t StartThreshold = 128;
-        constexpr size_t StopThreshold = 32;
+        const size_t nRingCount = SC55RingCount();
 
         if (!m_bOutputEnabled)
         {
-                if (SC55RingCount() >= StartThreshold)
+                if (nRingCount >= g_SC55StartThreshold)
                         m_bOutputEnabled = true;
                 else
                 {
@@ -870,13 +934,17 @@ size_t CSC55Synth::Render(float* pOutBuffer, size_t nFrames)
                         return nFrames;
                 }
         }
-        else if (SC55RingCount() < StopThreshold)
+        else if (nRingCount < g_SC55StopThreshold)
         {
                 m_bOutputEnabled = false;
                 ++g_SC55Underruns;
                 memset(pOutBuffer, 0, nFrames * 2 * sizeof(*pOutBuffer));
                 return nFrames;
         }
+
+        // Track how close playback came to running dry (diagnostics)
+        if (nRingCount < g_SC55LowWaterFrames)
+                g_SC55LowWaterFrames = nRingCount;
 
         m_pResamplerModel->getOutputSamples(
             pOutBuffer,
