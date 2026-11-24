@@ -59,6 +59,12 @@ bool CKernel::Initialize(void)
 	// Wake low-power waits regularly on this core (the other cores do this when their tasks start)
 	Utility::EnableEventStream();
 
+#if RASPPI >= 5
+	// Every core that uses I2C (cores 0 and 1) now has the event stream enabled, so I2C
+	// transfers may rest instead of polling at full speed (Circle RP1 I2C patch)
+	g_bI2CMasterIdleWait = TRUE;
+#endif
+
 #ifdef HDMI_CONSOLE
 	if (!m_Screen.Initialize())
 		return false;

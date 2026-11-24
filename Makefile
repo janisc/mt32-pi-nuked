@@ -44,6 +44,7 @@ $(CIRCLE_STDLIB_CONFIG) $(CIRCLE_CONFIG)&:
 	$(CIRCLESTDLIBHOME)/configure --raspberrypi=$(RASPBERRYPI) --prefix=$(PREFIX)
 
 # Apply patches
+	@${APPLY_PATCH} $(CIRCLEHOME) patches/circle-51-rp1-i2c-fixes.patch
 	@${APPLY_PATCH} $(CIRCLEHOME) patches/circle-51-sound-underrun-counter.patch
 
 ifeq ($(strip $(GC_SECTIONS)),1)
@@ -170,6 +171,7 @@ clean:
 #
 mrproper: clean
 # Reverse patches
+	@${REVERSE_PATCH} $(CIRCLEHOME) patches/circle-51-rp1-i2c-fixes.patch
 	@${REVERSE_PATCH} $(CIRCLEHOME) patches/circle-51-sound-underrun-counter.patch
 	@${REVERSE_PATCH} $(FLUIDSYNTHHOME) patches/fluidsynth-2.6.1-circle.patch
 

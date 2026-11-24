@@ -22,6 +22,8 @@
 
 #include <circle/logger.h>
 
+#include <cstring>
+
 #include "control/mister.h"
 #include "diag.h"
 
@@ -44,16 +46,21 @@ void CMisterControl::Update(const TMisterStatus& SystemStatus)
 {
 	assert(m_pI2CMaster != nullptr);
 
-	// Read current status from MiSTer
-	TMisterStatus MisterStatus;
-	const int nResult = m_pI2CMaster->Read(MisterI2CAddress, &MisterStatus, sizeof(MisterStatus));
-	if (nResult < 0)
+	// Read current status from MiSTer. One extra byte is requested: the MiSTer acknowledges
+	// every byte of a read, colliding with the final NACK, and the Raspberry Pi 5's I2C
+	// controller drops the byte where that happens (other models just read a dummy byte).
+	u8 Buffer[sizeof(TMisterStatus) + 1];
+	const int nResult = m_pI2CMaster->Read(MisterI2CAddress, Buffer, sizeof(Buffer));
+	if (nResult < static_cast<int>(sizeof(TMisterStatus)))
 	{
 		DIAG_INC(nI2CErrors);
 		Diag::LogI2CFailure("MiSTer read", nResult, Diag::nI2CErrors);
 		ResetState();
 		return;
 	}
+
+	TMisterStatus MisterStatus;
+	memcpy(&MisterStatus, Buffer, sizeof(MisterStatus));
 
 	// Log every change of the status reported by the MiSTer
 	static TMisterStatus s_LastLoggedStatus{TMisterSynth::Unknown, 0xFF, 0xFF};
