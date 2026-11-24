@@ -37,7 +37,8 @@ CPower::CPower()
 	: m_nPowerSaveTimeout(300),
 	  m_nLastActivityTime(0),
 	  m_State(TState::Normal),
-	  m_LastThrottledStatus(0)
+	  m_LastThrottledStatus(0),
+	  m_nLastThrottledCheckTime(0)
 {
 }
 
@@ -53,8 +54,13 @@ void CPower::Update()
 		OnEnterPowerSavingMode();
 	}
 
-	// Check for undervoltage and throttling
-	UpdateThrottledStatus();
+	// Check for undervoltage and throttling once per second; each check is a firmware
+	// mailbox request, and this is called on every pass of the main loop
+	if (nTicks - m_nLastThrottledCheckTime >= HZ)
+	{
+		UpdateThrottledStatus();
+		m_nLastThrottledCheckTime = nTicks;
+	}
 }
 
 void CPower::Awaken()

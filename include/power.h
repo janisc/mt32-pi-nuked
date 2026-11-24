@@ -57,6 +57,7 @@ private:
 
 	CBcmPropertyTags m_Tags;
 	u32 m_LastThrottledStatus;
+	unsigned int m_nLastThrottledCheckTime;
 };
 
 #endif
