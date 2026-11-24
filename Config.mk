@@ -95,6 +95,9 @@ NUKEDMT32HOME=$(realpath external/Nuked-MT32)
 NUKEDMT32BUILDDIR=build-nuked-mt32
 NUKEDMT32LIB=$(NUKEDMT32BUILDDIR)/libnukedmt32_core.a
 
+NUKEDSC55BUILDDIR=build-sc55
+NUKEDSC55LIB=$(NUKEDSC55BUILDDIR)/libnukedsc55_core.a
+
 FLUIDSYNTHHOME=$(realpath external/fluidsynth)
 FLUIDSYNTHBUILDDIR=build-fluidsynth
 FLUIDSYNTHLIB=$(FLUIDSYNTHBUILDDIR)/src/libfluidsynth.a

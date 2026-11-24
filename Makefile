@@ -5,7 +5,7 @@
 include Config.mk
 
 .DEFAULT_GOAL=all
-.PHONY: submodules circle-stdlib mt32emu nuked-mt32 fluidsynth all clean veryclean
+.PHONY: submodules circle-stdlib mt32emu nuked-mt32 nuked-sc55 fluidsynth all clean veryclean
 
 #
 # Functions to apply/reverse patches only if not completely applied/reversed already
@@ -94,7 +94,16 @@ $(MT32EMUBUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
 nuked-mt32: $(NUKEDMT32BUILDDIR)/.done
 
 $(NUKEDMT32BUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
-	@./build-nuked-mt32-core-pi4.sh
+	@CORE_CPU_FLAGS="$(CPU_FLAGS)" ./build-nuked-mt32-core-pi4.sh
+	@touch $@
+
+#
+# Build Nuked-SC55 headless core
+#
+nuked-sc55: $(NUKEDSC55BUILDDIR)/.done
+
+$(NUKEDSC55BUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
+	@CORE_CPU_FLAGS="$(CPU_FLAGS)" ./build-nuked-sc55-core-pi4-ofast-cycles24.sh
 	@touch $@
 
 #
@@ -144,7 +153,7 @@ $(FLUIDSYNTHBUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
 #
 # Build kernel itself
 #
-all: circle-stdlib mt32emu nuked-mt32 fluidsynth
+all: circle-stdlib mt32emu nuked-mt32 nuked-sc55 fluidsynth
 	@$(MAKE) -f Kernel.mk $(KERNEL).img $(KERNEL).hex
 
 #
@@ -172,3 +181,6 @@ mrproper: clean
 
 # Clean Nuked-MT32
 	@$(RM) -r $(NUKEDMT32BUILDDIR)
+
+# Clean Nuked-SC55
+	@$(RM) -r $(NUKEDSC55BUILDDIR)

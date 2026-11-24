@@ -8,6 +8,9 @@ SC55BUILDDIR="$ROOT/build-sc55"
 CXX="${CXX:-aarch64-none-elf-g++}"
 AR="${AR:-aarch64-none-elf-ar}"
 
+# CPU flags are passed in by the Makefile for the selected board (defaults to Pi 4)
+CORE_CPU_FLAGS="${CORE_CPU_FLAGS:--mcpu=cortex-a72+crc+simd}"
+
 # Note: -ffreestanding is not used; GCC 13+ rejects hosted C++ headers with it,
 # and the core is linked against circle-newlib's C library anyway.
 CXXFLAGS="-DNUKED_SC55_HEADLESS \
@@ -19,7 +22,7 @@ CXXFLAGS="-DNUKED_SC55_HEADLESS \
 -fomit-frame-pointer \
 -fno-unwind-tables \
 -fno-asynchronous-unwind-tables \
--mcpu=cortex-a72+crc+simd \
+$CORE_CPU_FLAGS \
 -fno-exceptions \
 -fno-rtti \
 -fno-threadsafe-statics \
@@ -43,7 +46,7 @@ mkdir -p "$SC55BUILDDIR"
 OBJECTS=""
 
 echo "SC55 source commit: $(git -C "$SC55HOME" rev-parse --short HEAD)"
-echo "SC55 CPU: Cortex-A72"
+echo "SC55 CPU: $CORE_CPU_FLAGS"
 echo "SC55 flags: $CXXFLAGS"
 
 for f in $SOURCES; do
