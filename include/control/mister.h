@@ -36,11 +36,13 @@ public:
 	CMisterControl(CI2CMaster* pI2CMaster, TEventQueue& EventQueue);
 
 	void Update(const TMisterStatus& SystemStatus);
+	void SetExtendedSynthMap(bool bEnabled) { m_bExtendedSynthMap = bEnabled; }
 
 private:
 	bool WriteConfigToMister(const TMisterStatus& NewStatus);
 	void ResetState();
 	void ApplyConfig(const TMisterStatus& NewStatus, const TMisterStatus& SystemStatus);
+	void ApplyExtendedConfig(const TMisterStatus& NewStatus, const TMisterStatus& SystemStatus);
 	void EnqueueDisplayImageEvent();
 	void EnqueueAllSoundOffEvent();
 
@@ -48,6 +50,7 @@ private:
 	TEventQueue* m_pEventQueue;
 
 	bool bMisterActive;
+	bool m_bExtendedSynthMap;
 	TMisterStatus m_LastSystemStatus;
 	TMisterStatus m_LastMisterStatus;
 };

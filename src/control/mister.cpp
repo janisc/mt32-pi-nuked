@@ -34,6 +34,7 @@ CMisterControl::CMisterControl(CI2CMaster* pI2CMaster, TEventQueue& EventQueue)
 	  m_pEventQueue(&EventQueue),
 
 	  bMisterActive(false),
+	  m_bExtendedSynthMap(false),
 	  m_LastSystemStatus{TMisterSynth::Unknown, 0xFF, 0xFF},
 	  m_LastMisterStatus{TMisterSynth::Unknown, 0xFF, 0xFF}
 {
@@ -119,9 +120,83 @@ void CMisterControl::Update(const TMisterStatus& SystemStatus)
 	}
 }
 
+// Extended synth map (mt32-pi.cfg, [control] mister_extended_synths = on). The MiSTer menu only
+// knows "MT-32" and "SoundFont"; with the extended map its three fields choose one of the four
+// engines, and the Pi reports its state back to the MiSTer in the same terms (see mt32pi.cpp):
+//
+//   MiSTer menu                        engine
+//   MT-32,     ROM 0 (MT-32 v1)        Munt, old MT-32 ROM set
+//   MT-32,     ROM 1 (MT-32 v2)        Munt, new MT-32 ROM set
+//   MT-32,     ROM 2 (CM-32L)          Nuked-MT32 (ROM from [nuked_mt32] rom_set)
+//   SoundFont, SoundFont 0             Nuked-SC55 (the model in [sc55] model)
+//   SoundFont, SoundFont 1             reserved for the other SC-55 model; the model cannot be
+//                                      switched at run time, so this plays the same SC-55 as slot 0
+//   SoundFont, SoundFont 2 and up      FluidSynth, SoundFont n-2
+struct TEngineChoice
+{
+	TSynth Synth;
+	u8 nIndex;	// Munt: ROM set; FluidSynth: SoundFont index; otherwise 0
+};
+
+static TEngineChoice ExtendedEngine(const TMisterStatus& Status)
+{
+	if (Status.Synth == TMisterSynth::MT32)
+	{
+		if (Status.MT32ROMSet >= 2)
+			return {TSynth::NukedMT32, 0};
+		return {TSynth::MT32, Status.MT32ROMSet};
+	}
+
+	if (Status.SoundFontIndex <= 1)
+		return {TSynth::SC55, 0};
+
+	return {TSynth::SoundFont, static_cast<u8>(Status.SoundFontIndex - 2)};
+}
+
+void CMisterControl::ApplyExtendedConfig(const TMisterStatus& NewStatus, const TMisterStatus& CurrentStatus)
+{
+	TEvent Event;
+	const TEngineChoice Target  = ExtendedEngine(NewStatus);
+	const TEngineChoice Current = ExtendedEngine(CurrentStatus);
+
+	LOGNOTE("apply (extended map) %02x r%u s%u -> engine %u, index %u", static_cast<u8>(NewStatus.Synth),
+		NewStatus.MT32ROMSet, NewStatus.SoundFontIndex, static_cast<u8>(Target.Synth), Target.nIndex);
+
+	if (NewStatus.Synth == TMisterSynth::SoundFont && NewStatus.SoundFontIndex == 1)
+		LOGWARN("SoundFont 1 is reserved for the other SC-55 model; playing the SC-55 of slot 0");
+
+	if (CurrentStatus.Synth == TMisterSynth::Unknown || Target.Synth != Current.Synth)
+	{
+		Event.Type = TEventType::SwitchSynth;
+		Event.SwitchSynth.Synth = Target.Synth;
+		m_pEventQueue->Enqueue(Event);
+	}
+
+	// Keep Munt's ROM set in step with the menu (ROM 0 and 1), whichever engine plays
+	if (NewStatus.MT32ROMSet <= 1 && NewStatus.MT32ROMSet != CurrentStatus.MT32ROMSet)
+	{
+		Event.Type = TEventType::SwitchMT32ROMSet;
+		Event.SwitchMT32ROMSet.ROMSet = static_cast<TMT32ROMSet>(NewStatus.MT32ROMSet);
+		m_pEventQueue->Enqueue(Event);
+	}
+
+	if (Target.Synth == TSynth::SoundFont && NewStatus.SoundFontIndex != CurrentStatus.SoundFontIndex)
+	{
+		Event.Type = TEventType::SwitchSoundFont;
+		Event.SwitchSoundFont.Index = Target.nIndex;
+		m_pEventQueue->Enqueue(Event);
+	}
+}
+
 void CMisterControl::ApplyConfig(const TMisterStatus& NewStatus, const TMisterStatus& CurrentStatus)
 {
 	TEvent Event;
+
+	if (m_bExtendedSynthMap)
+	{
+		ApplyExtendedConfig(NewStatus, CurrentStatus);
+		return;
+	}
 
 	LOGNOTE("apply %02x r%u s%u", static_cast<u8>(NewStatus.Synth), NewStatus.MT32ROMSet, NewStatus.SoundFontIndex);
 

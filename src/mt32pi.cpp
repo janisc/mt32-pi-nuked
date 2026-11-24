@@ -720,6 +720,7 @@ void CMT32Pi::UITask()
 	Utility::EnableEventStream();
 
 	const bool bMisterEnabled = m_pConfig->ControlMister;
+	m_MisterControl.SetExtendedSynthMap(m_pConfig->ControlMisterExtendedSynths);
 
 	// Nothing for this core to do; bail out
 	if (!(m_pLCD || bMisterEnabled))
@@ -779,6 +780,21 @@ void CMT32Pi::UITask()
 
 			if (m_pSoundFontSynth)
 				Status.SoundFontIndex = m_pSoundFontSynth->GetSoundFontIndex();
+
+			// Extended synth map: report the engine in the MiSTer menu's terms instead (see mister.cpp)
+			if (m_pConfig->ControlMisterExtendedSynths)
+			{
+				Status.MT32ROMSet     = m_pMT32Synth ? Utility::Min(static_cast<u8>(m_pMT32Synth->GetROMSet()), static_cast<u8>(1)) : 0;
+				Status.SoundFontIndex = m_pSoundFontSynth ? static_cast<u8>(m_pSoundFontSynth->GetSoundFontIndex() + 2) : 2;
+
+				if (m_pCurrentSynth == m_pNukedMT32Synth)
+					Status.MT32ROMSet = 2;
+				else if (m_pCurrentSynth == m_pSC55Synth)
+				{
+					Status.Synth          = TMisterSynth::SoundFont;
+					Status.SoundFontIndex = 0;
+				}
+			}
 
 			m_MisterControl.Update(Status);
 			m_nMisterUpdateTime = nTicks;
