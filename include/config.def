@@ -47,6 +47,7 @@ BEGIN_SECTION(sc55)
 CFG(model,                      TSC55Model,                     SC55Model,                              TSC55Model::MK2                                 )
 CFG(debug,                      bool,                           SC55Debug,                              false                                           )
 CFG(buffer_ms,                  int,                            SC55BufferMillis,                       0                                               )
+CFG(gain,                       float,                          SC55Gain,                               1.0f                                            )
 END_SECTION
 
 BEGIN_SECTION(midi)
@@ -85,6 +86,7 @@ CFG(rom_set,              TNukedMT32ROMVersion,       NukedMT32ROMVersion,      
 CFG(reversed_stereo,      bool,                       NukedMT32ReversedStereo,      false                                    )
 CFG(dc_block, bool, NukedMT32DCBlock, false)
 CFG(reverb, bool, NukedMT32Reverb, true)
+CFG(gain, float, NukedMT32Gain, 1.0f)
 END_SECTION
 
 BEGIN_SECTION(fluidsynth)

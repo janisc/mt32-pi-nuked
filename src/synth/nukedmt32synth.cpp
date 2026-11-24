@@ -10,6 +10,7 @@
 #include "mt32.h"
 #include "ResamplerModel.h"
 #include "synth/nukedmt32synth.h"
+#include "utility.h"
 #include <fatfs/ff.h>
 
 LOGMODULE("nukedmt32synth");
@@ -17,6 +18,7 @@ LOGMODULE("nukedmt32synth");
 CNukedMT32Synth::CNukedMT32Synth(unsigned int nSampleRate)
     : CSynthBase(nSampleRate),
       m_bDCBlock(false),
+      m_fGain(1.0f),
       m_pMT32(nullptr),
       m_pResamplerModel(nullptr),
       m_CurrentROMSet(TMT32ROMSet::Any),
@@ -227,6 +229,7 @@ bool CNukedMT32Synth::Initialize()
 
     // Optional output DC removal; does not repair upstream clipping.
     m_bDCBlock = CConfig::Get()->NukedMT32DCBlock;
+    m_fGain = Utility::Max(CConfig::Get()->NukedMT32Gain, 0.0f);
     m_DcBlocker.reset();
 
     const char* const pModel =
@@ -511,6 +514,8 @@ void CNukedMT32Synth::getOutputSamples(
         return;
     }
 
+    // Samples over full scale are saturated when the output is converted to integers
+    const float fScale = m_fGain / 32768.0f;
     unsigned int nRendered = 0;
 
     while (nRendered < nFrames)
@@ -530,12 +535,12 @@ void CNukedMT32Synth::getOutputSamples(
             pOutBuffer[(nRendered + i) * 2] =
                 static_cast<float>(
                     m_pMT32->samples[i][0]
-                ) / 32768.0f;
+                ) * fScale;
 
             pOutBuffer[(nRendered + i) * 2 + 1] =
                 static_cast<float>(
                     m_pMT32->samples[i][1]
-                ) / 32768.0f;
+                ) * fScale;
         }
 
         nRendered += nChunk;

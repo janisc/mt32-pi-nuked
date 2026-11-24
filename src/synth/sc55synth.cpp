@@ -236,7 +236,8 @@ CSC55Synth::CSC55Synth(
         unsigned nSampleRate,
         TSC55Model Model,
         bool bDebug,
-        unsigned nBufferMillis)
+        unsigned nBufferMillis,
+        float fGain)
         : CSynthBase(nSampleRate),
           m_pProducerTask(nullptr),
           m_bProducerRunning(false),
@@ -249,6 +250,7 @@ CSC55Synth::CSC55Synth(
           ),
           m_bDebug(bDebug),
           m_nVolume(100),
+          m_fGain(Utility::Max(fGain, 0.0f)),
           m_MkIHighPassPrevInL(0.0f),
           m_MkIHighPassPrevOutL(0.0f),
           m_MkILowPassL1(0.0f),
@@ -826,7 +828,8 @@ void CSC55Synth::Pump(size_t nMaxSteps)
 
 void CSC55Synth::getOutputSamples(float* pOutBuffer, unsigned int nFrames)
 {
-        const float Scale = 1.0f / 32768.0f;
+        // Samples over full scale are saturated when the output is converted to integers
+        const float Scale = m_fGain / 32768.0f;
 
         for (unsigned int i = 0; i < nFrames; ++i)
         {

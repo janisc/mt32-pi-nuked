@@ -484,7 +484,8 @@ bool CMT32Pi::InitSC55Synth()
                 m_pConfig->AudioSampleRate,
                 m_pConfig->SC55Model,
                 m_pConfig->SC55Debug,
-                static_cast<unsigned>(Utility::Max(m_pConfig->SC55BufferMillis, 0))
+                static_cast<unsigned>(Utility::Max(m_pConfig->SC55BufferMillis, 0)),
+                m_pConfig->SC55Gain
         );
         if (!m_pSC55Synth->Initialize())
         {

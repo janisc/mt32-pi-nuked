@@ -78,6 +78,7 @@ private:
 
     DcBlocker m_DcBlocker;
     bool m_bDCBlock;
+    float m_fGain;
     mt32_t* m_pMT32;
     SRCTools::FloatSampleProvider* m_pResamplerModel;
 

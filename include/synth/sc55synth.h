@@ -21,7 +21,7 @@ class CSC55Synth
 {
 public:
         // nBufferMillis: how far the emulation runs ahead of playback (latency); 0 = automatic
-        CSC55Synth(unsigned nSampleRate, TSC55Model Model, bool bDebug, unsigned nBufferMillis);
+        CSC55Synth(unsigned nSampleRate, TSC55Model Model, bool bDebug, unsigned nBufferMillis, float fGain);
         virtual ~CSC55Synth() override;
 
         // CSynthBase
@@ -59,6 +59,7 @@ private:
         unsigned m_nNativeSampleRate;
         bool m_bDebug;
         u8 m_nVolume;
+        float m_fGain;
 
         // SC-55 MkI DAC-to-point-B analog reconstruction state.
         float m_MkIHighPassPrevInL;
