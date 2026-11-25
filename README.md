@@ -1,3 +1,27 @@
+# mt32-pi-nuked on the Raspberry Pi 5
+
+This is a fork of [odiaboeeu/mt32-pi-nuked](https://github.com/odiaboeeu/mt32-pi-nuked) v1.1.0. It adds Raspberry Pi 5 support, plus fixes and options that are useful on earlier models too. The [original README](#original-readme) follows below, unchanged.
+
+This fork is AI assisted: the changes were made with Claude and tested on real hardware, a Raspberry Pi 5 with a MiSTer.
+
+**Documentation: [RASPBERRY_PI_5.md](RASPBERRY_PI_5.md)**
+
+It lists every change with the reason for it, and covers building, the SD card, configuration, suggested gains, test status, and credits and licenses.
+
+## Also found: Audio Boost in the MiSTer PC cores
+
+While testing we also found that Audio Boost in MiSTer's ao486 and z486 cores can make the sound quieter instead of louder, and turn clipping into cracks. In Monkey Island with MT-32 music, 2x lowers the level by 12 to 13 dB instead of raising it by 6 dB. mt32-pi is not involved: any sound that goes through the core's mixer is affected.
+
+The fix is in our z486 fork: [commit 3dc274c](https://github.com/janisc/z486_MiSTer/commit/3dc274c32b534bd0ddbb7801476759cb64fbf3b6), [documentation with the measurements](https://github.com/janisc/z486_MiSTer/blob/exp/audio-boost-dc/docs/AUDIO_BOOST.md). Pull requests for ao486 and z486 will follow soon.
+
+---
+
+# Original README
+
+*Everything from here on is the README of mt32-pi-nuked v1.1.0, unchanged. Where it says that the Raspberry Pi 5 has not been validated, it speaks for the original project.*
+
+---
+
 # mt32-pi-nuked
 
 This is an independent community-maintained derivative of mt32-pi. It is not an official mt32-pi, Nuked-SC55, Nuked-MT32, Munt, or FluidSynth release.
@@ -21,7 +45,7 @@ This development branch is intended for the Raspberry Pi 4. Nuked-SC55 is especi
 
 A Raspberry Pi 3 was tested during development, but it does not provide enough processing performance to run Nuked-SC55 reliably, even after the optimizations attempted for this port. Munt, FluidSynth, and some less demanding configurations may still work on earlier boards, but the complete four-module firmware described here should be treated as a Raspberry Pi 4 build.
 
-Experimental Raspberry Pi 5 support is available; see [RASPBERRY_PI_5.md](RASPBERRY_PI_5.md).
+Raspberry Pi 5 support has not been validated by this project.
 
 ### Nuked-MT32 implementation status and native RV2 reverb
 
@@ -339,13 +363,7 @@ Nuked-MT32 2.07
 [sc55]
 model = mk2
 debug = off
-buffer_ms = 0
-gain = 1.0
 ```
-
-`buffer_ms` sets how far the emulation runs ahead of playback, which is the SC-55's delay. `0` is automatic (512 native frames, about 8 ms; 30 ms on the Raspberry Pi 5). Increase it (20 to 1000) if "SC-55 underrun!" appears on the display.
-
-`gain` sets the output level, here and in `[nuked_mt32]` (2.0 is 6 dB louder than 1.0).
 
 Supported model values in this integration:
 
@@ -472,14 +490,6 @@ kernel=kernel8-rpi4.img
 
 Build requirements and toolchain setup remain based on the original mt32-pi and Circle documentation.
 
-## Building for Raspberry Pi 5
-
-Experimental: `make BOARD=pi5` builds `kernel_2712.img`. See [RASPBERRY_PI_5.md](RASPBERRY_PI_5.md) for the SD-card files, the configuration and the test status.
-
-## Troubleshooting log
-
-Set `log_file = on` in the `[system]` section of `mt32-pi.cfg` to write the system log to `mt32-pi-log.txt` on the SD card, including temperature, CPU clock, firmware throttling, CPU load, audio underruns, I2C errors and the output level of the active synth. Building with `DIAG=1` shows counters and the latest log message on the display instead of the normal UI.
-
 ## Dependency updates
 
 This development branch includes integration work for newer project revisions than the original mt32-pi release line:
@@ -500,7 +510,7 @@ git submodule status
 
 - Raspberry Pi 4 is the supported and validated target for the complete integration.
 - Raspberry Pi 3 does not have enough processing performance for reliable Nuked-SC55 operation in this port.
-- Raspberry Pi 5 support is experimental; see [RASPBERRY_PI_5.md](RASPBERRY_PI_5.md).
+- Raspberry Pi 5 has not been validated by this project.
 - Nuked-MT32 remains work in progress even though native RV2 reverb emulation is now integrated.
 - MT-32 NEW with 2.xx Control ROMs is the current Nuked-MT32 fidelity target.
 - MT-32 OLD with 1.xx Control ROMs is an experimental extension and should not be expected to match original OLD hardware with the same fidelity.
@@ -555,12 +565,10 @@ This project is intended to comply with the licenses of the projects it incorpor
 At the time this README was prepared:
 
 - mt32-pi is distributed under GPL-3.0.
-- Nuked-SC55 is distributed under GPL-2.0-or-later (since nukeykt's relicensing of 2026-09-03). The submodule commit used here was branched off before that and still carries the earlier notices.
-- Nuked-MT32 is distributed under GPL-2.0-or-later; its MCS-96 CPU core comes from MAME (Olivier Galibert, R. Belmont) under BSD-3-Clause.
-- Munt uses LGPL-2.1-or-later for the mt32emu library and SRCTools.
-- FluidSynth is distributed under LGPL-2.1-or-later.
-- Circle and circle-stdlib are distributed under GPL-3.0. newlib consists of code under several free licenses.
-- inih is distributed under the BSD-3-Clause license.
+- Nuked-SC55 is distributed under GPL-2.0-or-later.
+- Nuked-MT32 is distributed under GPL-2.0.
+- Munt uses LGPL-2.1 for the mt32emu library.
+- Other dependencies retain their own licenses.
 
 This README is informational and is not legal advice. The license texts included with the source code are authoritative.
 

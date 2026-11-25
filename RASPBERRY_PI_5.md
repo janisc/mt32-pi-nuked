@@ -71,7 +71,8 @@ The card must be formatted FAT32. Cards over 32 GB come formatted as exFAT, whic
 - **I2C speed with a MiSTer HAT:** set `i2c_baud_rate = 100000`. The Pi 5's I2C controller uses a fixed, short fast-mode clock for any rate other than exactly 100000 or 1000000 Hz, which the MiSTer cannot read (the MT32-pi OSD menu does not appear).
 - **Audio:** the Pi 5 has no headphone jack; use `output_device = i2s`.
 - **Cooling without a fan:** `arm_freq=1500` (the Pi 5's minimum) in the `[pi5]` section of `config.txt` is enough for Nuked-SC55. Firmware throttling starts at 80-85 C. When changing the clock, watch for the underrun warnings on the display.
-- **SC-55 delay:** automatic (`buffer_ms = 0`) is 30 ms on the Pi 5.
+- **SC-55 delay:** `buffer_ms` in `[sc55]` sets how far the emulation runs ahead of playback. `0` is automatic: 30 ms on the Pi 5, 512 native frames (about 8 ms) on earlier models. Increase it (20 to 1000) if "SC-55 underrun!" appears on the display.
+- **Troubleshooting log:** `log_file = on` in `[system]` writes the system log to `mt32-pi-log.txt` on the SD card. Building with `DIAG=1` shows counters and the latest log message on the display instead of the normal UI.
 - **MiSTer core reset:** when the core resets, the MiSTer's OSD selection (MT-32 or SoundFont) is applied again, as on earlier models, so a synth chosen with the buttons (e.g. SC-55) is replaced.
 
 ## Suggested gains
@@ -122,7 +123,7 @@ Not tested at all on the Pi 5: USB, networking, HDMI audio, SC-55 MkI. The chang
 | [Nuked-MT32](https://github.com/nukeykt/Nuked-MT32) | nukeykt; MCS-96 core from MAME by Olivier Galibert and R. Belmont; [fork](https://github.com/keithadler/Nuked-MT32) by Keith Adler | GPL-2.0-or-later; MAME parts BSD-3-Clause |
 | [Munt](https://github.com/munt/munt) (mt32emu, SRCTools) | Dean Beeler, Jerome Fisher, Sergey V. Mikayev | LGPL-2.1-or-later |
 | [FluidSynth](https://github.com/FluidSynth/fluidsynth) | Peter Hanappe and others | LGPL-2.1-or-later |
-| [Circle](https://github.com/rsta2/circle), [circle-stdlib](https://github.com/smuehlst/circle-stdlib) | Rene Stange; Stephan Mühlstrasser | GPL-3.0-or-later; GPL-3.0 |
+| [Circle](https://github.com/rsta2/circle), [circle-stdlib](https://github.com/smuehlst/circle-stdlib) | Rene Stange; Stephan Mühlstrasser | GPL-3.0-or-later; GPL-3.0. newlib consists of code under several free licenses |
 | [inih](https://github.com/benhoyt/inih) | Ben Hoyt | BSD-3-Clause |
 
 The changes in this branch are under the same license as the files they modify; new files are GPL-3.0-or-later like mt32-pi. They were made with the help of an AI coding assistant (see the commit trailers) and tested on the hardware above.
